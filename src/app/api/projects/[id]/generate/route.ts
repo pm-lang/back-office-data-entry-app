@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { processImages } from "@/lib/ocr";
 import { generateDocument } from "@/lib/docgen";
+import { supabase } from "@/lib/supabase";
 
 // POST /api/projects/[id]/generate - Generate Word document
 export async function POST(
@@ -105,6 +106,22 @@ export async function POST(
       await prisma.project.update({
         where: { id: projectId },
         data: { status: "COMPLETED" },
+      });
+
+      // Delete images from Supabase Storage to save space
+      const imagePaths = project.images.map((img) => `${projectId}/${img.filename}`);
+      if (imagePaths.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from("worksheets")
+          .remove(imagePaths);
+        if (storageError) {
+          console.error("Failed to delete images from storage:", storageError);
+        }
+      }
+
+      // Delete images from database
+      await prisma.projectImage.deleteMany({
+        where: { projectId }
       });
 
       // Return document as downloadable file
