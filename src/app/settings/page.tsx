@@ -35,6 +35,10 @@ export default function SettingsPage() {
     if (storedKey) setApiKey(storedKey);
     const storedOcrSpaceKey = localStorage.getItem("ocr_space_api_key");
     if (storedOcrSpaceKey) setOcrSpaceApiKey(storedOcrSpaceKey);
+    const storedGroqKey = localStorage.getItem("groq_api_key");
+    if (storedGroqKey) {
+      setGroqApiKey(storedGroqKey);
+    }
     const storedEngine = localStorage.getItem("ocr_engine") as "direct" | "tesseract" | "gemini" | "ocrspace" | "groq";
     if (storedEngine) setOcrEngine(storedEngine);
   }, []);

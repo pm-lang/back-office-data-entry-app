@@ -33,11 +33,6 @@ export async function POST(
       // Ignore empty body errors
     }
 
-    // Fallback to env var if client doesn't provide one
-    if (!groqApiKey && process.env.GROQ_API_KEY) {
-      groqApiKey = process.env.GROQ_API_KEY;
-    }
-
     // Verify API key is configured if using Gemini
     if (ocrEngine === "gemini") {
       if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "your_gemini_api_key_here") {
@@ -52,10 +47,14 @@ export async function POST(
     }
 
     if (ocrEngine === "groq" && !groqApiKey) {
-      return NextResponse.json(
-        { error: "Groq API key is missing. Please configure it in Settings." },
-        { status: 400 }
-      );
+      if (process.env.GROQ_API_KEY) {
+        groqApiKey = process.env.GROQ_API_KEY;
+      } else {
+        return NextResponse.json(
+          { error: "Groq API key is missing. Please configure it in Settings." },
+          { status: 400 }
+        );
+      }
     }
 
     // Fetch project with images
