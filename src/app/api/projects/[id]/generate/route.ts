@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { processImages as processImagesGemini } from "@/lib/ocr";
 import { processImages as processImagesTesseract } from "@/lib/ocr-tesseract";
+import { processImagesOcrSpace } from "@/lib/ocr-space";
 import { generateDocument } from "@/lib/docgen";
 import { supabase } from "@/lib/supabase";
 
@@ -13,10 +14,14 @@ export async function POST(
     const { id: projectId } = await params;
 
     let ocrEngine = "tesseract"; // default to tesseract
+    let ocrSpaceApiKey = "";
     try {
       const body = await request.json();
       if (body.ocrEngine) {
         ocrEngine = body.ocrEngine;
+      }
+      if (body.ocrSpaceApiKey) {
+        ocrSpaceApiKey = body.ocrSpaceApiKey;
       }
     } catch (e) {
       // Ignore empty body errors
@@ -77,6 +82,8 @@ export async function POST(
       let ocrResults;
       if (ocrEngine === "gemini") {
         ocrResults = await processImagesGemini(imagesToProcess, project.subject);
+      } else if (ocrEngine === "ocrspace") {
+        ocrResults = await processImagesOcrSpace(imagesToProcess, project.subject, ocrSpaceApiKey);
       } else {
         ocrResults = await processImagesTesseract(imagesToProcess, project.subject);
       }

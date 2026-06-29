@@ -12,11 +12,13 @@ import {
   Check,
   Cpu,
   Cloud,
+  Zap,
 } from "lucide-react";
 
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
-  const [ocrEngine, setOcrEngine] = useState<"tesseract" | "gemini">("tesseract");
+  const [ocrSpaceApiKey, setOcrSpaceApiKey] = useState("");
+  const [ocrEngine, setOcrEngine] = useState<"tesseract" | "gemini" | "ocrspace">("ocrspace");
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -29,17 +31,20 @@ export default function SettingsPage() {
     // Load from localStorage
     const storedKey = localStorage.getItem("gemini_api_key");
     if (storedKey) setApiKey(storedKey);
-    const storedEngine = localStorage.getItem("ocr_engine") as "tesseract" | "gemini";
+    const storedOcrSpaceKey = localStorage.getItem("ocr_space_api_key");
+    if (storedOcrSpaceKey) setOcrSpaceApiKey(storedOcrSpaceKey);
+    const storedEngine = localStorage.getItem("ocr_engine") as "tesseract" | "gemini" | "ocrspace";
     if (storedEngine) setOcrEngine(storedEngine);
   }, []);
 
-  const handleEngineChange = (engine: "tesseract" | "gemini") => {
+  const handleEngineChange = (engine: "tesseract" | "gemini" | "ocrspace") => {
     setOcrEngine(engine);
     localStorage.setItem("ocr_engine", engine);
   };
 
   const handleSave = () => {
     localStorage.setItem("gemini_api_key", apiKey);
+    localStorage.setItem("ocr_space_api_key", ocrSpaceApiKey);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -130,23 +135,88 @@ export default function SettingsPage() {
             </button>
 
             <button
+              onClick={() => handleEngineChange("ocrspace")}
+              style={{
+                flex: 1,
+                padding: "16px",
+                borderRadius: 12,
+                border: `2px solid ${
+                  ocrEngine === "ocrspace"
+                    ? "var(--accent-primary)"
+                    : "var(--border-primary)"
+                }`,
+                background:
+                  ocrEngine === "ocrspace" ? "rgba(108, 92, 231, 0.05)" : "transparent",
+                cursor: "pointer",
+                transition: "all 0.2s",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Zap
+                size={24}
+                color={
+                  ocrEngine === "ocrspace"
+                    ? "var(--accent-primary)"
+                    : "var(--text-muted)"
+                }
+              />
+              <div
+                style={{
+                  fontWeight: 600,
+                  color:
+                    ocrEngine === "ocrspace"
+                      ? "var(--accent-primary)"
+                      : "var(--text-primary)",
+                }}
+              >
+                OCR.Space (Fast Cloud)
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
+                Ultra fast. Requires free API key.
+              </div>
+            </button>
+
+            <button
               onClick={() => handleEngineChange("gemini")}
               style={{
                 flex: 1,
                 padding: "16px",
                 borderRadius: 12,
-                border: ocrEngine === "gemini" ? "2px solid var(--accent-primary)" : "1px solid var(--border-primary)",
-                background: ocrEngine === "gemini" ? "rgba(108, 92, 231, 0.05)" : "var(--bg-card)",
+                border: `2px solid ${
+                  ocrEngine === "gemini"
+                    ? "var(--accent-primary)"
+                    : "var(--border-primary)"
+                }`,
+                background:
+                  ocrEngine === "gemini" ? "rgba(108, 92, 231, 0.05)" : "transparent",
                 cursor: "pointer",
+                transition: "all 0.2s",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 gap: 8,
-                transition: "all 0.2s",
               }}
             >
-              <Cloud size={24} color={ocrEngine === "gemini" ? "var(--accent-primary)" : "var(--text-muted)"} />
-              <div style={{ fontWeight: 600, color: ocrEngine === "gemini" ? "var(--accent-primary)" : "var(--text-primary)" }}>
+              <Cloud
+                size={24}
+                color={
+                  ocrEngine === "gemini"
+                    ? "var(--accent-primary)"
+                    : "var(--text-muted)"
+                }
+              />
+              <div
+                style={{
+                  fontWeight: 600,
+                  color:
+                    ocrEngine === "gemini"
+                      ? "var(--accent-primary)"
+                      : "var(--text-primary)",
+                }}
+              >
                 Gemini AI (Cloud)
               </div>
               <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
@@ -272,8 +342,73 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+        </>
+        )}
+
+        {/* OCR.Space API Key Section */}
+        {ocrEngine === "ocrspace" && (
+          <div className="glass-card" style={{ padding: 28, marginBottom: 24 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(108, 92, 231, 0.15)",
+                  borderRadius: 10,
+                  padding: 8,
+                  display: "flex",
+                }}
+              >
+                <Key size={20} color="var(--accent-primary)" />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 600 }}>
+                  OCR.Space API Key
+                </h2>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
+                  Get a free key at <a href="https://ocr.space/ocrapi" target="_blank" rel="noreferrer" style={{color: "var(--accent-primary)"}}>ocr.space/ocrapi</a>
+                </p>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <input
+                className="input-field"
+                type="text"
+                placeholder="Enter your OCR.Space free API key..."
+                value={ocrSpaceApiKey}
+                onChange={(e) => setOcrSpaceApiKey(e.target.value)}
+                style={{ marginBottom: 12 }}
+              />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  className="glow-button"
+                  onClick={handleSave}
+                  disabled={!ocrSpaceApiKey.trim()}
+                  style={{
+                    fontSize: 13,
+                    padding: "8px 20px",
+                    opacity: !ocrSpaceApiKey.trim() ? 0.5 : 1,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                >
+                  {saved ? <CheckCircle2 size={14} /> : null}
+                  {saved ? "Saved!" : "Save Key"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Setup Instructions */}
+        {ocrEngine === "gemini" && (
         <div className="glass-card" style={{ padding: 28 }}>
           <div
             style={{
@@ -525,9 +660,10 @@ export default function SettingsPage() {
             }}>.env.local</code> file for the server-side OCR to work.
           </div>
         </div>
-          </>
         )}
+
       </main>
     </div>
   );
 }
+

@@ -117,13 +117,14 @@ export default function ProjectEditor() {
       setGenerateStatus(`Processing ${images.length} images with AI...`);
 
       const ocrEngine = localStorage.getItem("ocr_engine") || "tesseract";
+      const ocrSpaceApiKey = localStorage.getItem("ocr_space_api_key") || "";
 
       const res = await fetch(`/api/projects/${projectId}/generate`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ocrEngine }),
+        body: JSON.stringify({ ocrEngine, ocrSpaceApiKey }),
       });
 
       if (!res.ok) {
