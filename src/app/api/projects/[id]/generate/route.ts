@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { processImages } from "@/lib/ocr";
+import { processImages as processImagesGemini } from "@/lib/ocr";
+import { processImages as processImagesTesseract } from "@/lib/ocr-tesseract";
 import { generateDocument } from "@/lib/docgen";
 import { supabase } from "@/lib/supabase";
 
@@ -11,15 +12,27 @@ export async function POST(
   try {
     const { id: projectId } = await params;
 
-    // Verify API key is configured
-    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "your_gemini_api_key_here") {
-      return NextResponse.json(
-        {
-          error:
-            "Gemini API key is not configured. Please set GEMINI_API_KEY in your .env.local file. Visit Settings for setup instructions.",
-        },
-        { status: 400 }
-      );
+    let ocrEngine = "tesseract"; // default to tesseract
+    try {
+      const body = await request.json();
+      if (body.ocrEngine) {
+        ocrEngine = body.ocrEngine;
+      }
+    } catch (e) {
+      // Ignore empty body errors
+    }
+
+    // Verify API key is configured if using Gemini
+    if (ocrEngine === "gemini") {
+      if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "your_gemini_api_key_here") {
+        return NextResponse.json(
+          {
+            error:
+              "Gemini API key is not configured. Please set GEMINI_API_KEY in your .env.local file. Visit Settings for setup instructions.",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     // Fetch project with images
@@ -60,8 +73,13 @@ export async function POST(
         path: `${projectId}/${img.filename}`,
       }));
 
-      // Process all images with OCR
-      const ocrResults = await processImages(imagesToProcess, project.subject);
+      // Process all images with appropriate OCR engine
+      let ocrResults;
+      if (ocrEngine === "gemini") {
+        ocrResults = await processImagesGemini(imagesToProcess, project.subject);
+      } else {
+        ocrResults = await processImagesTesseract(imagesToProcess, project.subject);
+      }
 
       // Check for failures
       const failures = ocrResults.filter((r) => !r.success);

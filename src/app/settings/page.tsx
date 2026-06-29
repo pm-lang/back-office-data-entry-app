@@ -10,10 +10,13 @@ import {
   Info,
   Copy,
   Check,
+  Cpu,
+  Cloud,
 } from "lucide-react";
 
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
+  const [ocrEngine, setOcrEngine] = useState<"tesseract" | "gemini">("tesseract");
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -26,7 +29,14 @@ export default function SettingsPage() {
     // Load from localStorage
     const storedKey = localStorage.getItem("gemini_api_key");
     if (storedKey) setApiKey(storedKey);
+    const storedEngine = localStorage.getItem("ocr_engine") as "tesseract" | "gemini";
+    if (storedEngine) setOcrEngine(storedEngine);
   }, []);
+
+  const handleEngineChange = (engine: "tesseract" | "gemini") => {
+    setOcrEngine(engine);
+    localStorage.setItem("ocr_engine", engine);
+  };
 
   const handleSave = () => {
     localStorage.setItem("gemini_api_key", apiKey);
@@ -65,8 +75,111 @@ export default function SettingsPage() {
           Configure your API keys and preferences
         </p>
 
-        {/* Gemini API Key Section */}
+        {/* OCR Engine Selection */}
         <div className="glass-card" style={{ padding: 28, marginBottom: 24 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              marginBottom: 20,
+            }}
+          >
+            <div
+              style={{
+                background: "rgba(16, 185, 129, 0.15)",
+                borderRadius: 10,
+                padding: 8,
+                display: "flex",
+              }}
+            >
+              <Cpu size={20} color="#10b981" />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 17, fontWeight: 600 }}>OCR Engine</h2>
+              <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
+                Choose how text is extracted from worksheet images
+              </p>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", gap: 16, marginBottom: ocrEngine === "tesseract" ? 0 : 20 }}>
+            <button
+              onClick={() => handleEngineChange("tesseract")}
+              style={{
+                flex: 1,
+                padding: "16px",
+                borderRadius: 12,
+                border: ocrEngine === "tesseract" ? "2px solid #10b981" : "1px solid var(--border-primary)",
+                background: ocrEngine === "tesseract" ? "rgba(16, 185, 129, 0.05)" : "var(--bg-card)",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8,
+                transition: "all 0.2s",
+              }}
+            >
+              <Cpu size={24} color={ocrEngine === "tesseract" ? "#10b981" : "var(--text-muted)"} />
+              <div style={{ fontWeight: 600, color: ocrEngine === "tesseract" ? "#10b981" : "var(--text-primary)" }}>
+                Tesseract (Local)
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
+                Free, runs on device. Best for printed text.
+              </div>
+            </button>
+
+            <button
+              onClick={() => handleEngineChange("gemini")}
+              style={{
+                flex: 1,
+                padding: "16px",
+                borderRadius: 12,
+                border: ocrEngine === "gemini" ? "2px solid var(--accent-primary)" : "1px solid var(--border-primary)",
+                background: ocrEngine === "gemini" ? "rgba(108, 92, 231, 0.05)" : "var(--bg-card)",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8,
+                transition: "all 0.2s",
+              }}
+            >
+              <Cloud size={24} color={ocrEngine === "gemini" ? "var(--accent-primary)" : "var(--text-muted)"} />
+              <div style={{ fontWeight: 600, color: ocrEngine === "gemini" ? "var(--accent-primary)" : "var(--text-primary)" }}>
+                Gemini AI (Cloud)
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
+                Higher accuracy. Requires API key. Best for handwriting.
+              </div>
+            </button>
+          </div>
+
+          {ocrEngine === "tesseract" && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 12,
+                borderRadius: 10,
+                background: "rgba(16, 185, 129, 0.1)",
+                border: "1px solid rgba(16, 185, 129, 0.2)",
+                fontSize: 13,
+                color: "#10b981",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <CheckCircle2 size={16} />
+              Using local OCR. No API key required.
+            </div>
+          )}
+        </div>
+
+        {/* Gemini API Key Section - Only show if Gemini is selected */}
+        {ocrEngine === "gemini" && (
+          <>
+            <div className="glass-card" style={{ padding: 28, marginBottom: 24 }}>
           <div
             style={{
               display: "flex",
@@ -412,6 +525,8 @@ export default function SettingsPage() {
             }}>.env.local</code> file for the server-side OCR to work.
           </div>
         </div>
+          </>
+        )}
       </main>
     </div>
   );
