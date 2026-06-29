@@ -1,18 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 // GET /api/projects - List all projects
 export async function GET() {
   try {
-    const projects = await prisma.project.findMany({
-      orderBy: { createdAt: "desc" },
-      include: {
-        _count: {
-          select: { images: true },
-        },
-      },
-    });
-    return NextResponse.json(projects);
+    const { data: projects, error } = await supabase
+      .from("Project")
+      .select("*, _count:ProjectImage(count)")
+      .order("createdAt", { ascending: false });
+
+    if (error) throw error;
+
+    const formattedProjects = projects?.map(p => ({
+      ...p,
+      _count: {
+        images: Array.isArray(p._count) ? p._count[0]?.count || 0 : 0
+      }
+    })) || [];
+
+    return NextResponse.json(formattedProjects);
   } catch (error) {
     console.error("Failed to fetch projects:", error);
     return NextResponse.json(
@@ -35,13 +41,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const project = await prisma.project.create({
-      data: {
+    const { data: project, error } = await supabase
+      .from("Project")
+      .insert({
         name: name.trim(),
         subject: subject || "OTHER",
         description: description || null,
-      },
-    });
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(project, { status: 201 });
   } catch (error) {
