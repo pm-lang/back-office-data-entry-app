@@ -99,15 +99,10 @@ export async function processImagesOcrSpace(
   subject: string,
   apiKey: string
 ): Promise<OCRResult[]> {
-  const results: OCRResult[] = [];
-
-  // OCR.Space is fast, but the free API limits parallel requests.
-  // We process them sequentially to avoid rate limit errors.
-  for (const img of images) {
-    console.log(`Processing image ${img.id} via OCR.Space...`);
-    const result = await processImageOcrSpace(img.path, img.id, subject, apiKey);
-    results.push(result);
-  }
-
+  console.log(`Processing ${images.length} images via OCR.Space in parallel...`);
+  // Run all image OCR requests in parallel for speed
+  const results = await Promise.all(
+    images.map((img) => processImageOcrSpace(img.path, img.id, subject, apiKey))
+  );
   return results;
 }

@@ -18,7 +18,7 @@ import {
 } from "docx";
 import path from "path";
 import sharp from "sharp";
-import { supabase } from "@/lib/supabase";
+// supabase import removed - images are now pre-fetched by the caller
 
 interface FontConfig {
   hindi: string;
@@ -173,7 +173,7 @@ function parseMarkdownTable(
 }
 
 export async function generateDocument(
-  ocrContent: { text: string; imagePath: string }[],
+  ocrContent: { text: string; imagePath: string; imageBuffer?: Buffer | null }[],
   projectName: string,
   subject: string
 ): Promise<Buffer> {
@@ -183,200 +183,200 @@ export async function generateDocument(
   for (const page of ocrContent) {
     const lines = page.text.split("\n");
 
-  let i = 0;
-  while (i < lines.length) {
-    const line = lines[i].trimEnd();
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i].trimEnd();
 
-    // Skip empty lines
-    if (line.trim() === "") {
-      children.push(new Paragraph({ children: [] }));
-      i++;
-      continue;
-    }
-
-    // Skip horizontal rules
-    if (line.match(/^---+$/)) {
-      i++;
-      continue;
-    }
-
-    // Handle headings
-    if (line.startsWith("### ")) {
-      children.push(
-        new Paragraph({
-          children: parseMarkdownLine(line.substring(4), fontConfig),
-          heading: HeadingLevel.HEADING_3,
-          spacing: { before: 240, after: 120 },
-        })
-      );
-      i++;
-      continue;
-    }
-
-    if (line.startsWith("## ")) {
-      children.push(
-        new Paragraph({
-          children: parseMarkdownLine(line.substring(3), fontConfig),
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 360, after: 120 },
-        })
-      );
-      i++;
-      continue;
-    }
-
-    if (line.startsWith("# ")) {
-      children.push(
-        new Paragraph({
-          children: parseMarkdownLine(line.substring(2), fontConfig),
-          heading: HeadingLevel.HEADING_1,
-          alignment: AlignmentType.CENTER,
-          spacing: { before: 480, after: 240 },
-        })
-      );
-      i++;
-      continue;
-    }
-
-    // Handle tables
-    if (line.includes("|") && i + 1 < lines.length && lines[i + 1]?.match(/^[\s|:-]+$/)) {
-      const tableLines: string[] = [line];
-      let j = i + 1;
-      while (j < lines.length && lines[j].includes("|")) {
-        tableLines.push(lines[j]);
-        j++;
+      // Skip empty lines
+      if (line.trim() === "") {
+        children.push(new Paragraph({ children: [] }));
+        i++;
+        continue;
       }
-      const table = parseMarkdownTable(tableLines, fontConfig);
-      if (table) {
-        children.push(table);
-        children.push(new Paragraph({ children: [] })); // spacing after table
+
+      // Skip horizontal rules
+      if (line.match(/^---+$/)) {
+        i++;
+        continue;
       }
-      i = j;
-      continue;
-    }
 
-    // Handle image bbox placeholders [IMAGE_BBOX: ymin,xmin,ymax,xmax]
-    const bboxMatch = line.match(/\[IMAGE_BBOX:\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]/);
-    if (bboxMatch) {
-      try {
-        const { data: storageData, error } = await supabase.storage
-          .from("worksheets")
-          .download(page.imagePath);
+      // Handle headings
+      if (line.startsWith("### ")) {
+        children.push(
+          new Paragraph({
+            children: parseMarkdownLine(line.substring(4), fontConfig),
+            heading: HeadingLevel.HEADING_3,
+            spacing: { before: 240, after: 120 },
+          })
+        );
+        i++;
+        continue;
+      }
 
-        if (!error && storageData) {
-          const ymin = parseInt(bboxMatch[1], 10);
-          const xmin = parseInt(bboxMatch[2], 10);
-          const ymax = parseInt(bboxMatch[3], 10);
-          const xmax = parseInt(bboxMatch[4], 10);
+      if (line.startsWith("## ")) {
+        children.push(
+          new Paragraph({
+            children: parseMarkdownLine(line.substring(3), fontConfig),
+            heading: HeadingLevel.HEADING_2,
+            spacing: { before: 360, after: 120 },
+          })
+        );
+        i++;
+        continue;
+      }
 
-          // Get original image metadata from buffer
-          const arrayBuffer = await storageData.arrayBuffer();
-          const imageBuffer = Buffer.from(arrayBuffer);
-          const image = sharp(imageBuffer);
-          const metadata = await image.metadata();
+      if (line.startsWith("# ")) {
+        children.push(
+          new Paragraph({
+            children: parseMarkdownLine(line.substring(2), fontConfig),
+            heading: HeadingLevel.HEADING_1,
+            alignment: AlignmentType.CENTER,
+            spacing: { before: 480, after: 240 },
+          })
+        );
+        i++;
+        continue;
+      }
 
-          if (metadata.width && metadata.height) {
-            // Convert normalized coordinates (0-1000) to actual pixels
-            // Add a small 2% padding to the bounding box if possible
-            const padding = 20; 
-            const pxMin = Math.max(0, Math.floor((xmin - padding) * metadata.width / 1000));
-            const pyMin = Math.max(0, Math.floor((ymin - padding) * metadata.height / 1000));
-            const pxMax = Math.min(metadata.width, Math.ceil((xmax + padding) * metadata.width / 1000));
-            const pyMax = Math.min(metadata.height, Math.ceil((ymax + padding) * metadata.height / 1000));
-            
-            const extractWidth = pxMax - pxMin;
-            const extractHeight = pyMax - pyMin;
+      // Handle tables
+      if (line.includes("|") && i + 1 < lines.length && lines[i + 1]?.match(/^[\s|:-]+$/)) {
+        const tableLines: string[] = [line];
+        let j = i + 1;
+        while (j < lines.length && lines[j].includes("|")) {
+          tableLines.push(lines[j]);
+          j++;
+        }
+        const table = parseMarkdownTable(tableLines, fontConfig);
+        if (table) {
+          children.push(table);
+          children.push(new Paragraph({ children: [] })); // spacing after table
+        }
+        i = j;
+        continue;
+      }
 
-            if (extractWidth > 0 && extractHeight > 0) {
-              const croppedBuffer = await image
-                .extract({ left: pxMin, top: pyMin, width: extractWidth, height: extractHeight })
-                .toBuffer();
+      // Handle image bbox placeholders [IMAGE_BBOX: ymin,xmin,ymax,xmax]
+      const bboxMatch = line.match(/\[IMAGE_BBOX:\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\]/);
+      if (bboxMatch) {
+        try {
+          const pageImageBuffer = page.imageBuffer ?? null;
+          if (pageImageBuffer) {
+            const ymin = parseInt(bboxMatch[1], 10);
+            const xmin = parseInt(bboxMatch[2], 10);
+            const ymax = parseInt(bboxMatch[3], 10);
+            const xmax = parseInt(bboxMatch[4], 10);
 
-              const ext = path.extname(page.imagePath).toLowerCase().replace(".", "");
-              const type = (["jpg", "png", "gif", "bmp"].includes(ext) ? ext : "jpg") as "jpg" | "png" | "gif" | "bmp";
+            const image = sharp(pageImageBuffer);
+            const metadata = await image.metadata();
 
-              // Scale down for docx if too large (A4 width is approx 600 points)
-              const docWidth = Math.min(500, extractWidth);
-              const docHeight = Math.floor(extractHeight * (docWidth / extractWidth));
+            if (metadata.width && metadata.height) {
+              // Convert normalized coordinates (0-1000) to actual pixels
+              // Add a small 2% padding to the bounding box if possible
+              const padding = 20;
+              const pxMin = Math.max(0, Math.floor((xmin - padding) * metadata.width / 1000));
+              const pyMin = Math.max(0, Math.floor((ymin - padding) * metadata.height / 1000));
+              const pxMax = Math.min(metadata.width, Math.ceil((xmax + padding) * metadata.width / 1000));
+              const pyMax = Math.min(metadata.height, Math.ceil((ymax + padding) * metadata.height / 1000));
 
-              children.push(
-                new Paragraph({
-                  children: [
-                    new ImageRun({
-                      data: croppedBuffer,
-                      type: type,
-                      transformation: {
-                        width: docWidth,
-                        height: docHeight,
-                      },
-                    }),
-                  ],
-                  alignment: AlignmentType.CENTER,
-                  spacing: { before: 120, after: 120 },
-                })
-              );
+              const extractWidth = pxMax - pxMin;
+              const extractHeight = pyMax - pyMin;
+
+              if (extractWidth > 0 && extractHeight > 0) {
+                const croppedBuffer = await image
+                  .extract({ left: pxMin, top: pyMin, width: extractWidth, height: extractHeight })
+                  .toBuffer();
+
+                const ext = path.extname(page.imagePath).toLowerCase().replace(".", "");
+                const type = (["jpg", "png", "gif", "bmp"].includes(ext) ? ext : "jpg") as "jpg" | "png" | "gif" | "bmp";
+
+                // Scale down for docx if too large (A4 width is approx 600 points)
+                const docWidth = Math.min(500, extractWidth);
+                const docHeight = Math.floor(extractHeight * (docWidth / extractWidth));
+
+                children.push(
+                  new Paragraph({
+                    children: [
+                      new ImageRun({
+                        data: croppedBuffer,
+                        type: type,
+                        transformation: {
+                          width: docWidth,
+                          height: docHeight,
+                        },
+                      }),
+                    ],
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 120, after: 120 },
+                  })
+                );
+              }
             }
           }
+        } catch (err) {
+          console.error("Failed to crop/insert image into docx:", err);
         }
-      } catch (err) {
-        console.error("Failed to crop/insert image into docx:", err);
-      }
-      i++;
-      continue;
-    }
-
-    // Handle old IMAGE placeholders for backward compatibility
-    if (line.match(/\[IMAGE:.*\]/)) {
-      try {
-        const { data: storageData, error } = await supabase.storage
-          .from("worksheets")
-          .download(page.imagePath);
-
-        if (!error && storageData) {
-          const arrayBuffer = await storageData.arrayBuffer();
-          const imageBuffer = Buffer.from(arrayBuffer);
-          const ext = page.imagePath.substring(page.imagePath.lastIndexOf(".")).toLowerCase().replace(".", "");
-          const type = (["jpg", "png", "gif", "bmp"].includes(ext) ? ext : "jpg") as "jpg" | "png" | "gif" | "bmp";
-
-          children.push(
-            new Paragraph({
-              children: [
-                new ImageRun({
-                  data: imageBuffer,
-                  type: type,
-                  transformation: {
-                    width: 500,
-                    height: 500,
-                  },
-                }),
-              ],
-              alignment: AlignmentType.CENTER,
-              spacing: { before: 120, after: 120 },
-            })
-          );
-        }
-      } catch (err) {
-        console.error("Failed to insert image into docx:", err);
+        i++;
+        continue;
       }
 
-      children.push(
-        new Paragraph({
-          children: [
-            createTextRun(line, fontConfig, {
-              italic: true,
-              bold: true,
-            }),
-          ],
-          spacing: { before: 120, after: 120 },
-          alignment: AlignmentType.CENTER,
-        })
-      );
-      i++;
-      continue;
-    }
+      // Handle old IMAGE placeholders for backward compatibility
+      if (line.match(/\[IMAGE:.*\]/)) {
+        try {
+          const pageImageBuffer = page.imageBuffer ?? null;
+          if (pageImageBuffer) {
+            const ext = page.imagePath.substring(page.imagePath.lastIndexOf(".")).toLowerCase().replace(".", "");
+            const type = (["jpg", "png", "gif", "bmp"].includes(ext) ? ext : "jpg") as "jpg" | "png" | "gif" | "bmp";
 
-    // Handle fill-in-the-blanks (lines with multiple underscores)
-    if (line.match(/_{5,}/)) {
+            children.push(
+              new Paragraph({
+                children: [
+                  new ImageRun({
+                    data: pageImageBuffer,
+                    type: type,
+                    transformation: {
+                      width: 500,
+                      height: 500,
+                    },
+                  }),
+                ],
+                alignment: AlignmentType.CENTER,
+                spacing: { before: 120, after: 120 },
+              })
+            );
+          }
+        } catch (err) {
+          console.error("Failed to insert image into docx:", err);
+        }
+
+        children.push(
+          new Paragraph({
+            children: [
+              createTextRun(line, fontConfig, {
+                italic: true,
+                bold: true,
+              }),
+            ],
+            spacing: { before: 120, after: 120 },
+            alignment: AlignmentType.CENTER,
+          })
+        );
+        i++;
+        continue;
+      }
+
+      // Handle fill-in-the-blanks (lines with multiple underscores)
+      if (line.match(/_{5,}/)) {
+        children.push(
+          new Paragraph({
+            children: parseMarkdownLine(line, fontConfig),
+            spacing: { before: 60, after: 60 },
+          })
+        );
+        i++;
+        continue;
+      }
+
+      // Regular paragraph
       children.push(
         new Paragraph({
           children: parseMarkdownLine(line, fontConfig),
@@ -384,28 +384,17 @@ export async function generateDocument(
         })
       );
       i++;
-      continue;
     }
 
-    // Regular paragraph
-    children.push(
-      new Paragraph({
-        children: parseMarkdownLine(line, fontConfig),
-        spacing: { before: 60, after: 60 },
-      })
-    );
-    i++;
+    // Add page break separator if there are more pages
+    if (page !== ocrContent[ocrContent.length - 1]) {
+      children.push(new Paragraph({
+        children: [createTextRun("---", fontConfig)],
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 240, after: 240 }
+      }));
+    }
   }
-  
-  // Add page break separator if there are more pages
-  if (page !== ocrContent[ocrContent.length - 1]) {
-    children.push(new Paragraph({
-       children: [createTextRun("---", fontConfig)],
-       alignment: AlignmentType.CENTER,
-       spacing: { before: 240, after: 240 }
-    }));
-  }
-}
 
   const doc = new Document({
     styles: {

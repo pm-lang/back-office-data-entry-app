@@ -96,29 +96,46 @@ export async function POST(
         );
       }
 
-      // Save OCR text to database
-      for (const result of ocrResults) {
-        if (result.success) {
-          await supabase
-            .from("ProjectImage")
-            .update({ ocrText: result.text })
-            .eq("id", result.imageId);
-        }
-      }
+      // Save OCR text to database - run all in parallel
+      await Promise.all(
+        ocrResults
+          .filter((r) => r.success)
+          .map((result) =>
+            supabase
+              .from("ProjectImage")
+              .update({ ocrText: result.text })
+              .eq("id", result.imageId)
+          )
+      );
 
       // Collect successful OCR texts and image paths in order
+      // Also pre-download images now (before they are deleted) so docgen doesn't re-fetch
+      const imageDataMap = new Map<string, Buffer>();
+      await Promise.all(
+        project.images.map(async (img: any) => {
+          const imgPath = `${projectId}/${img.filename}`;
+          const { data, error } = await supabase.storage.from("worksheets").download(imgPath);
+          if (!error && data) {
+            const ab = await data.arrayBuffer();
+            imageDataMap.set(imgPath, Buffer.from(ab));
+          }
+        })
+      );
+
       const orderedContent = project.images
         .map((img: any) => {
           const result = ocrResults.find((r) => r.imageId === img.id);
           if (result?.success) {
+            const imgPath = `${projectId}/${img.filename}`;
             return {
               text: result.text,
-              imagePath: `${projectId}/${img.filename}`
+              imagePath: imgPath,
+              imageBuffer: imageDataMap.get(imgPath) ?? null,
             };
           }
           return null;
         })
-        .filter((item: any): item is { text: string; imagePath: string } => item !== null);
+        .filter((item: any): item is { text: string; imagePath: string; imageBuffer: Buffer | null } => item !== null);
 
       // Generate Word document
       const docBuffer = await generateDocument(
@@ -133,22 +150,14 @@ export async function POST(
         .update({ status: "COMPLETED", updatedAt: new Date().toISOString() })
         .eq("id", projectId);
 
-      // Delete images from Supabase Storage to save space
+      // Cleanup images in background (after doc is ready)
       const imagePaths = project.images.map((img: any) => `${projectId}/${img.filename}`);
-      if (imagePaths.length > 0) {
-        const { error: storageError } = await supabase.storage
-          .from("worksheets")
-          .remove(imagePaths);
-        if (storageError) {
-          console.error("Failed to delete images from storage:", storageError);
-        }
-      }
-
-      // Delete images from database
-      await supabase
-        .from("ProjectImage")
-        .delete()
-        .eq("projectId", projectId);
+      Promise.all([
+        imagePaths.length > 0
+          ? supabase.storage.from("worksheets").remove(imagePaths)
+          : Promise.resolve(),
+        supabase.from("ProjectImage").delete().eq("projectId", projectId),
+      ]).catch((err) => console.error("Cleanup error (non-fatal):", err));
 
       // Return document as downloadable file
       const filename = `${project.name.replace(/[^a-zA-Z0-9\u0900-\u097F ]/g, "_")}.docx`;
