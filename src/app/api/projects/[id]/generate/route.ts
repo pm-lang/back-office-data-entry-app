@@ -47,8 +47,8 @@ export async function POST(
     }
 
     if (ocrEngine === "groq" && !groqApiKey) {
-      if (process.env.GROQ_API_KEY) {
-        groqApiKey = process.env.GROQ_API_KEY;
+      if (process.env.ImgtoDoc || process.env.GROQ_API_KEY) {
+        groqApiKey = (process.env.ImgtoDoc || process.env.GROQ_API_KEY) as string;
       } else {
         return NextResponse.json(
           { error: "Groq API key is missing. Please configure it in Settings." },
