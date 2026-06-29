@@ -118,6 +118,7 @@ export default function ProjectEditor() {
 
       const ocrEngine = localStorage.getItem("ocr_engine") || "tesseract";
       const ocrSpaceApiKey = localStorage.getItem("ocr_space_api_key") || "";
+      const groqApiKey = localStorage.getItem("groq_api_key") || "";
 
       setGenerateStatus(
         ocrEngine === "direct" 
@@ -130,7 +131,7 @@ export default function ProjectEditor() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ocrEngine, ocrSpaceApiKey }),
+        body: JSON.stringify({ ocrEngine, ocrSpaceApiKey, groqApiKey }),
       });
 
       if (!res.ok) {

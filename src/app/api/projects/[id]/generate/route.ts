@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { processImages as processImagesGemini } from "@/lib/ocr";
 import { processImages as processImagesTesseract } from "@/lib/ocr-tesseract";
 import { processImagesOcrSpace } from "@/lib/ocr-space";
+import { processImagesGroq } from "@/lib/ocr-groq";
 import { generateDocument } from "@/lib/docgen";
 import { generateDocumentDirect } from "@/lib/docgen-direct";
 import { supabase } from "@/lib/supabase";
@@ -14,8 +15,9 @@ export async function POST(
   try {
     const { id: projectId } = await params;
 
-    let ocrEngine = "tesseract"; // default to tesseract (editable text extraction)
+    let ocrEngine = "groq"; // default to groq
     let ocrSpaceApiKey = "";
+    let groqApiKey = "";
     try {
       const body = await request.json();
       if (body.ocrEngine) {
@@ -23,6 +25,9 @@ export async function POST(
       }
       if (body.ocrSpaceApiKey) {
         ocrSpaceApiKey = body.ocrSpaceApiKey;
+      }
+      if (body.groqApiKey) {
+        groqApiKey = body.groqApiKey;
       }
     } catch (e) {
       // Ignore empty body errors
@@ -39,6 +44,13 @@ export async function POST(
           { status: 400 }
         );
       }
+    }
+
+    if (ocrEngine === "groq" && !groqApiKey) {
+      return NextResponse.json(
+        { error: "Groq API key is missing. Please configure it in Settings." },
+        { status: 400 }
+      );
     }
 
     // Fetch project with images
@@ -126,6 +138,8 @@ export async function POST(
           ocrResults = await processImagesGemini(imagesToProcess, project.subject);
         } else if (ocrEngine === "ocrspace") {
           ocrResults = await processImagesOcrSpace(imagesToProcess, project.subject, ocrSpaceApiKey);
+        } else if (ocrEngine === "groq") {
+          ocrResults = await processImagesGroq(imagesToProcess, project.subject, groqApiKey);
         } else {
           ocrResults = await processImagesTesseract(imagesToProcess, project.subject);
         }

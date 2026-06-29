@@ -19,7 +19,8 @@ import {
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [ocrSpaceApiKey, setOcrSpaceApiKey] = useState("");
-  const [ocrEngine, setOcrEngine] = useState<"direct" | "tesseract" | "gemini" | "ocrspace">("tesseract");
+  const [groqApiKey, setGroqApiKey] = useState("");
+  const [ocrEngine, setOcrEngine] = useState<"direct" | "tesseract" | "gemini" | "ocrspace" | "groq">("groq");
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -34,11 +35,11 @@ export default function SettingsPage() {
     if (storedKey) setApiKey(storedKey);
     const storedOcrSpaceKey = localStorage.getItem("ocr_space_api_key");
     if (storedOcrSpaceKey) setOcrSpaceApiKey(storedOcrSpaceKey);
-    const storedEngine = localStorage.getItem("ocr_engine") as "direct" | "tesseract" | "gemini" | "ocrspace";
+    const storedEngine = localStorage.getItem("ocr_engine") as "direct" | "tesseract" | "gemini" | "ocrspace" | "groq";
     if (storedEngine) setOcrEngine(storedEngine);
   }, []);
 
-  const handleEngineChange = (engine: "direct" | "tesseract" | "gemini" | "ocrspace") => {
+  const handleEngineChange = (engine: "direct" | "tesseract" | "gemini" | "ocrspace" | "groq") => {
     setOcrEngine(engine);
     localStorage.setItem("ocr_engine", engine);
   };
@@ -46,6 +47,7 @@ export default function SettingsPage() {
   const handleSave = () => {
     localStorage.setItem("gemini_api_key", apiKey);
     localStorage.setItem("ocr_space_api_key", ocrSpaceApiKey);
+    localStorage.setItem("groq_api_key", groqApiKey);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   };
@@ -291,6 +293,113 @@ export default function SettingsPage() {
             </div>
           )}
         </div>
+
+        {/* Groq API Key Section */}
+        {ocrEngine === "groq" && (
+          <div className="glass-card" style={{ padding: 28, marginBottom: 24 }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                marginBottom: 20,
+              }}
+            >
+              <div
+                style={{
+                  background: "rgba(108, 92, 231, 0.15)",
+                  borderRadius: 10,
+                  padding: 8,
+                  display: "flex",
+                }}
+              >
+                <Key size={20} color="var(--accent-primary)" />
+              </div>
+              <div>
+                <h2 style={{ fontSize: 17, fontWeight: 600 }}>Groq API Key</h2>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
+                  Required for Groq Llama 4 Vision OCR
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <input
+                type="password"
+                value={groqApiKey}
+                onChange={(e) => setGroqApiKey(e.target.value)}
+                placeholder="gsk_..."
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  borderRadius: 10,
+                  border: "1px solid var(--border-primary)",
+                  background: "var(--bg-card)",
+                  color: "var(--text-primary)",
+                  fontSize: 14,
+                  outline: "none",
+                  transition: "border-color 0.2s",
+                }}
+                onFocus={(e) =>
+                  (e.target.style.borderColor = "var(--accent-primary)")
+                }
+                onBlur={(e) =>
+                  (e.target.style.borderColor = "var(--border-primary)")
+                }
+              />
+              <button
+                onClick={handleSave}
+                style={{
+                  background: "var(--accent-primary)",
+                  color: "white",
+                  border: "none",
+                  padding: "0 24px",
+                  borderRadius: 10,
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  transition: "opacity 0.2s",
+                }}
+                onMouseOver={(e) => (e.currentTarget.style.opacity = "0.9")}
+                onMouseOut={(e) => (e.currentTarget.style.opacity = "1")}
+              >
+                {saved ? <Check size={18} /> : "Save Key"}
+              </button>
+            </div>
+
+            <div
+              style={{
+                marginTop: 16,
+                padding: 12,
+                borderRadius: 8,
+                background: "rgba(108, 92, 231, 0.05)",
+                display: "flex",
+                gap: 8,
+                fontSize: 13,
+                color: "var(--text-secondary)",
+              }}
+            >
+              <Info size={16} style={{ flexShrink: 0, marginTop: 2 }} />
+              <div>
+                Get your free API key at{" "}
+                <a
+                  href="https://console.groq.com/keys"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{
+                    color: "var(--accent-primary)",
+                    textDecoration: "none",
+                    fontWeight: 500,
+                  }}
+                >
+                  console.groq.com
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Gemini API Key Section - Only show if Gemini is selected */}
         {ocrEngine === "gemini" && (
