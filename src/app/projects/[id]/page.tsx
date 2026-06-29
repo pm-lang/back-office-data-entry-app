@@ -9,6 +9,7 @@ import {
   X,
   Loader2,
   CheckCircle2,
+  FileText,
   AlertCircle,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
@@ -42,6 +43,7 @@ export default function ProjectEditor() {
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  const [downloadExt, setDownloadExt] = useState<"docx" | "xlsx">("docx");
 
   const fetchProject = useCallback(async () => {
     try {
@@ -103,12 +105,12 @@ export default function ProjectEditor() {
     }
   };
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (format: "doc" | "excel") => {
     if (images.length === 0) return;
 
     setGenerating(true);
     setGenerateProgress(10);
-    setGenerateStatus("Starting OCR processing...");
+    setGenerateStatus(`Starting OCR processing for ${format === "excel" ? "Spreadsheet" : "Document"}...`);
     setError(null);
     setDownloadUrl(null);
 
@@ -122,7 +124,7 @@ export default function ProjectEditor() {
 
       setGenerateStatus(
         ocrEngine === "direct" 
-          ? `Inserting ${images.length} images into Word document...`
+          ? `Inserting ${images.length} images into ${format === "excel" ? "Spreadsheet" : "Word document"}...`
           : `Processing ${images.length} images with OCR...`
       );
 
@@ -131,7 +133,7 @@ export default function ProjectEditor() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ ocrEngine, ocrSpaceApiKey, groqApiKey }),
+        body: JSON.stringify({ ocrEngine, ocrSpaceApiKey, groqApiKey, outputFormat: format }),
       });
 
       if (!res.ok) {
@@ -140,14 +142,15 @@ export default function ProjectEditor() {
       }
 
       setGenerateProgress(90);
-      setGenerateStatus("Preparing document for download...");
+      setGenerateStatus(`Preparing ${format === "excel" ? "Spreadsheet" : "document"} for download...`);
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       setDownloadUrl(url);
+      setDownloadExt(format === "excel" ? "xlsx" : "docx");
 
       setGenerateProgress(100);
-      setGenerateStatus("Document ready!");
+      setGenerateStatus(`${format === "excel" ? "Spreadsheet" : "Document"} ready!`);
 
       // Update project status
       setProject((prev) =>
@@ -155,7 +158,7 @@ export default function ProjectEditor() {
       );
     } catch (err) {
       const errMsg =
-        err instanceof Error ? err.message : "Failed to generate document";
+        err instanceof Error ? err.message : `Failed to generate ${format === "excel" ? "spreadsheet" : "document"}`;
       setError(errMsg);
       setGenerateStatus("");
     } finally {
@@ -167,7 +170,7 @@ export default function ProjectEditor() {
     if (!downloadUrl || !project) return;
     const a = document.createElement("a");
     a.href = downloadUrl;
-    a.download = `${project.name.replace(/[^a-zA-Z0-9\u0900-\u097F ]/g, "_")}.docx`;
+    a.download = `${project.name.replace(/[^a-zA-Z0-9\u0900-\u097F ]/g, "_")}.${downloadExt}`;
     a.click();
   };
 
@@ -280,32 +283,62 @@ export default function ProjectEditor() {
                   }}
                 >
                   <Download size={16} />
-                  Download .docx
+                  Download .{downloadExt}
                 </button>
               )}
-              <button
-                className="glow-button"
-                onClick={handleGenerate}
-                disabled={images.length === 0 || generating}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 8,
-                  fontSize: 14,
-                  opacity:
-                    images.length === 0 || generating ? 0.5 : 1,
-                }}
-              >
-                {generating ? (
-                  <Loader2
-                    size={16}
-                    style={{ animation: "spin 1s linear infinite" }}
-                  />
-                ) : (
-                  <Wand2 size={16} />
-                )}
-                {generating ? "Generating..." : "Generate Document"}
-              </button>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  onClick={() => handleGenerate("doc")}
+                  disabled={images.length === 0 || generating}
+                  style={{
+                    background:
+                      images.length > 0 && !generating
+                        ? "var(--accent-primary)"
+                        : "var(--border-primary)",
+                    color: "white",
+                    border: "none",
+                    padding: "10px 20px",
+                    borderRadius: "10px",
+                    fontWeight: 600,
+                    cursor:
+                      images.length > 0 && !generating
+                        ? "pointer"
+                        : "not-allowed",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <FileText size={18} />
+                  Generate Document
+                </button>
+
+                <button
+                  onClick={() => handleGenerate("excel")}
+                  disabled={images.length === 0 || generating}
+                  style={{
+                    background:
+                      images.length > 0 && !generating
+                        ? "#107c41" // Excel green
+                        : "var(--border-primary)",
+                    color: "white",
+                    border: "none",
+                    padding: "10px 20px",
+                    borderRadius: "10px",
+                    fontWeight: 600,
+                    cursor:
+                      images.length > 0 && !generating
+                        ? "pointer"
+                        : "not-allowed",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                  }}
+                >
+                  <FileText size={18} />
+                  Generate Sheet
+                </button>
+              </div>
               <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
             </div>
           </div>

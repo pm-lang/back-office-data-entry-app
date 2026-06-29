@@ -5,6 +5,8 @@ import { processImagesOcrSpace } from "@/lib/ocr-space";
 import { processImagesGroq } from "@/lib/ocr-groq";
 import { generateDocument } from "@/lib/docgen";
 import { generateDocumentDirect } from "@/lib/docgen-direct";
+import { generateExcel } from "@/lib/excelgen";
+import { generateExcelDirect } from "@/lib/excelgen-direct";
 import { supabase } from "@/lib/supabase";
 
 // POST /api/projects/[id]/generate - Generate Word document
@@ -16,12 +18,16 @@ export async function POST(
     const { id: projectId } = await params;
 
     let ocrEngine = "groq"; // default to groq
+    let outputFormat = "doc"; // default to doc
     let ocrSpaceApiKey = "";
     let groqApiKey = "";
     try {
       const body = await request.json();
       if (body.ocrEngine) {
         ocrEngine = body.ocrEngine;
+      }
+      if (body.outputFormat) {
+        outputFormat = body.outputFormat;
       }
       if (body.ocrSpaceApiKey) {
         ocrSpaceApiKey = body.ocrSpaceApiKey;
@@ -117,12 +123,20 @@ export async function POST(
           })
           .filter((x: any): x is { imagePath: string; imageBuffer: Buffer } => x !== null);
 
-        docBuffer = await generateDocumentDirect(
-          imageEntries,
-          project.name,
-          project.subject
-        );
-        console.timeEnd("Generate direct doc");
+        if (outputFormat === "excel") {
+          docBuffer = await generateExcelDirect(
+            imageEntries,
+            project.name,
+            project.subject
+          );
+        } else {
+          docBuffer = await generateDocumentDirect(
+            imageEntries,
+            project.name,
+            project.subject
+          );
+        }
+        console.timeEnd("Generate direct file");
 
       } else {
         // ===== OCR PATH: Process with selected OCR engine, then generate =====
@@ -184,11 +198,19 @@ export async function POST(
           })
           .filter((item: any): item is { text: string; imagePath: string; imageBuffer: Buffer | null } => item !== null);
 
-        docBuffer = await generateDocument(
-          orderedContent,
-          project.name,
-          project.subject
-        );
+        if (outputFormat === "excel") {
+          docBuffer = await generateExcel(
+            ocrResults.filter((r) => r.success),
+            project.name,
+            project.subject
+          );
+        } else {
+          docBuffer = await generateDocument(
+            orderedContent,
+            project.name,
+            project.subject
+          );
+        }
       }
 
       // Update project status
@@ -207,13 +229,16 @@ export async function POST(
       ]).catch((err) => console.error("Cleanup error (non-fatal):", err));
 
       // Return document as downloadable file
-      const filename = `${project.name.replace(/[^a-zA-Z0-9\u0900-\u097F ]/g, "_")}.docx`;
+      const isExcel = outputFormat === "excel";
+      const ext = isExcel ? "xlsx" : "docx";
+      const filename = `${project.name.replace(/[^a-zA-Z0-9\u0900-\u097F ]/g, "_")}.${ext}`;
       
       return new NextResponse(new Uint8Array(docBuffer), {
         status: 200,
         headers: {
-          "Content-Type":
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+          "Content-Type": isExcel
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
           "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
           "Content-Length": docBuffer.length.toString(),
         },
