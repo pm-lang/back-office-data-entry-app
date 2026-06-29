@@ -13,12 +13,13 @@ import {
   Cpu,
   Cloud,
   Zap,
+  Image,
 } from "lucide-react";
 
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [ocrSpaceApiKey, setOcrSpaceApiKey] = useState("");
-  const [ocrEngine, setOcrEngine] = useState<"tesseract" | "gemini" | "ocrspace">("ocrspace");
+  const [ocrEngine, setOcrEngine] = useState<"direct" | "tesseract" | "gemini" | "ocrspace">("direct");
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{
@@ -33,11 +34,11 @@ export default function SettingsPage() {
     if (storedKey) setApiKey(storedKey);
     const storedOcrSpaceKey = localStorage.getItem("ocr_space_api_key");
     if (storedOcrSpaceKey) setOcrSpaceApiKey(storedOcrSpaceKey);
-    const storedEngine = localStorage.getItem("ocr_engine") as "tesseract" | "gemini" | "ocrspace";
+    const storedEngine = localStorage.getItem("ocr_engine") as "direct" | "tesseract" | "gemini" | "ocrspace";
     if (storedEngine) setOcrEngine(storedEngine);
   }, []);
 
-  const handleEngineChange = (engine: "tesseract" | "gemini" | "ocrspace") => {
+  const handleEngineChange = (engine: "direct" | "tesseract" | "gemini" | "ocrspace") => {
     setOcrEngine(engine);
     localStorage.setItem("ocr_engine", engine);
   };
@@ -101,14 +102,39 @@ export default function SettingsPage() {
               <Cpu size={20} color="#10b981" />
             </div>
             <div>
-              <h2 style={{ fontSize: 17, fontWeight: 600 }}>OCR Engine</h2>
+              <h2 style={{ fontSize: 17, fontWeight: 600 }}>Document Mode</h2>
               <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 2 }}>
-                Choose how text is extracted from worksheet images
+                Choose how worksheet images are converted to Word documents
               </p>
             </div>
           </div>
 
-          <div style={{ display: "flex", gap: 16, marginBottom: ocrEngine === "tesseract" ? 0 : 20 }}>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 20 }}>
+            <button
+              onClick={() => handleEngineChange("direct")}
+              style={{
+                flex: 1,
+                minWidth: 140,
+                padding: "16px",
+                borderRadius: 12,
+                border: ocrEngine === "direct" ? "2px solid #10b981" : "1px solid var(--border-primary)",
+                background: ocrEngine === "direct" ? "rgba(16, 185, 129, 0.05)" : "var(--bg-card)",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 8,
+                transition: "all 0.2s",
+              }}
+            >
+              <Image size={24} color={ocrEngine === "direct" ? "#10b981" : "var(--text-muted)"} />
+              <div style={{ fontWeight: 600, color: ocrEngine === "direct" ? "#10b981" : "var(--text-primary)" }}>
+                Direct (Images Only)
+              </div>
+              <div style={{ fontSize: 12, color: "var(--text-muted)", textAlign: "center" }}>
+                ⚡ Instant. No API key. Just images → Word doc.
+              </div>
+            </button>
             <button
               onClick={() => handleEngineChange("tesseract")}
               style={{
@@ -225,6 +251,26 @@ export default function SettingsPage() {
             </button>
           </div>
 
+          {ocrEngine === "direct" && (
+            <div
+              style={{
+                marginTop: 16,
+                padding: 12,
+                borderRadius: 10,
+                background: "rgba(16, 185, 129, 0.1)",
+                border: "1px solid rgba(16, 185, 129, 0.2)",
+                fontSize: 13,
+                color: "#10b981",
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <CheckCircle2 size={16} />
+              Images will be placed directly into the Word document. No OCR, no API key needed. Fastest option.
+            </div>
+          )}
+
           {ocrEngine === "tesseract" && (
             <div
               style={{
@@ -241,7 +287,7 @@ export default function SettingsPage() {
               }}
             >
               <CheckCircle2 size={16} />
-              Using local OCR. No API key required.
+              Using local OCR. No API key required. Slower than Direct.
             </div>
           )}
         </div>

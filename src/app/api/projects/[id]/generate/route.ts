@@ -3,6 +3,7 @@ import { processImages as processImagesGemini } from "@/lib/ocr";
 import { processImages as processImagesTesseract } from "@/lib/ocr-tesseract";
 import { processImagesOcrSpace } from "@/lib/ocr-space";
 import { generateDocument } from "@/lib/docgen";
+import { generateDocumentDirect } from "@/lib/docgen-direct";
 import { supabase } from "@/lib/supabase";
 
 // POST /api/projects/[id]/generate - Generate Word document
@@ -13,7 +14,7 @@ export async function POST(
   try {
     const { id: projectId } = await params;
 
-    let ocrEngine = "tesseract"; // default to tesseract
+    let ocrEngine = "direct"; // default to direct (images-only, fastest)
     let ocrSpaceApiKey = "";
     try {
       const body = await request.json();
@@ -72,44 +73,8 @@ export async function POST(
       .eq("id", projectId);
 
     try {
-      // Prepare image paths for Supabase Storage
-      const imagesToProcess = project.images.map((img: any) => ({
-        id: img.id,
-        path: `${projectId}/${img.filename}`,
-      }));
-
-      // Process all images with appropriate OCR engine
-      let ocrResults;
-      if (ocrEngine === "gemini") {
-        ocrResults = await processImagesGemini(imagesToProcess, project.subject);
-      } else if (ocrEngine === "ocrspace") {
-        ocrResults = await processImagesOcrSpace(imagesToProcess, project.subject, ocrSpaceApiKey);
-      } else {
-        ocrResults = await processImagesTesseract(imagesToProcess, project.subject);
-      }
-
-      // Check for failures
-      const failures = ocrResults.filter((r) => !r.success);
-      if (failures.length === ocrResults.length) {
-        throw new Error(
-          `All OCR processing failed. First error: ${failures[0]?.error || "Unknown error"}`
-        );
-      }
-
-      // Save OCR text to database - run all in parallel
-      await Promise.all(
-        ocrResults
-          .filter((r) => r.success)
-          .map((result) =>
-            supabase
-              .from("ProjectImage")
-              .update({ ocrText: result.text })
-              .eq("id", result.imageId)
-          )
-      );
-
-      // Collect successful OCR texts and image paths in order
-      // Also pre-download images now (before they are deleted) so docgen doesn't re-fetch
+      // Pre-download all images in parallel (needed for both direct and OCR modes)
+      console.time("Download all images");
       const imageDataMap = new Map<string, Buffer>();
       await Promise.all(
         project.images.map(async (img: any) => {
@@ -121,28 +86,87 @@ export async function POST(
           }
         })
       );
+      console.timeEnd("Download all images");
 
-      const orderedContent = project.images
-        .map((img: any) => {
-          const result = ocrResults.find((r) => r.imageId === img.id);
-          if (result?.success) {
+      let docBuffer: Buffer;
+
+      if (ocrEngine === "direct") {
+        // ===== FAST PATH: Images directly into Word doc, no OCR =====
+        console.time("Generate direct doc");
+        const imageEntries = project.images
+          .map((img: any) => {
             const imgPath = `${projectId}/${img.filename}`;
-            return {
-              text: result.text,
-              imagePath: imgPath,
-              imageBuffer: imageDataMap.get(imgPath) ?? null,
-            };
-          }
-          return null;
-        })
-        .filter((item: any): item is { text: string; imagePath: string; imageBuffer: Buffer | null } => item !== null);
+            const buf = imageDataMap.get(imgPath);
+            return buf ? { imagePath: imgPath, imageBuffer: buf } : null;
+          })
+          .filter((x: any): x is { imagePath: string; imageBuffer: Buffer } => x !== null);
 
-      // Generate Word document
-      const docBuffer = await generateDocument(
-        orderedContent,
-        project.name,
-        project.subject
-      );
+        docBuffer = await generateDocumentDirect(
+          imageEntries,
+          project.name,
+          project.subject
+        );
+        console.timeEnd("Generate direct doc");
+
+      } else {
+        // ===== OCR PATH: Process with selected OCR engine, then generate =====
+        const imagesToProcess = project.images.map((img: any) => ({
+          id: img.id,
+          path: `${projectId}/${img.filename}`,
+        }));
+
+        let ocrResults;
+        console.time("OCR processing");
+        if (ocrEngine === "gemini") {
+          ocrResults = await processImagesGemini(imagesToProcess, project.subject);
+        } else if (ocrEngine === "ocrspace") {
+          ocrResults = await processImagesOcrSpace(imagesToProcess, project.subject, ocrSpaceApiKey);
+        } else {
+          ocrResults = await processImagesTesseract(imagesToProcess, project.subject);
+        }
+        console.timeEnd("OCR processing");
+
+        // Check for failures
+        const failures = ocrResults.filter((r) => !r.success);
+        if (failures.length === ocrResults.length) {
+          throw new Error(
+            `All OCR processing failed. First error: ${failures[0]?.error || "Unknown error"}`
+          );
+        }
+
+        // Save OCR text to database in parallel
+        await Promise.all(
+          ocrResults
+            .filter((r) => r.success)
+            .map((result) =>
+              supabase
+                .from("ProjectImage")
+                .update({ ocrText: result.text })
+                .eq("id", result.imageId)
+            )
+        );
+
+        const orderedContent = project.images
+          .map((img: any) => {
+            const result = ocrResults.find((r) => r.imageId === img.id);
+            if (result?.success) {
+              const imgPath = `${projectId}/${img.filename}`;
+              return {
+                text: result.text,
+                imagePath: imgPath,
+                imageBuffer: imageDataMap.get(imgPath) ?? null,
+              };
+            }
+            return null;
+          })
+          .filter((item: any): item is { text: string; imagePath: string; imageBuffer: Buffer | null } => item !== null);
+
+        docBuffer = await generateDocument(
+          orderedContent,
+          project.name,
+          project.subject
+        );
+      }
 
       // Update project status
       await supabase
@@ -150,7 +174,7 @@ export async function POST(
         .update({ status: "COMPLETED", updatedAt: new Date().toISOString() })
         .eq("id", projectId);
 
-      // Cleanup images in background (after doc is ready)
+      // Cleanup images in background (don't block the response)
       const imagePaths = project.images.map((img: any) => `${projectId}/${img.filename}`);
       Promise.all([
         imagePaths.length > 0
@@ -186,4 +210,3 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
-
