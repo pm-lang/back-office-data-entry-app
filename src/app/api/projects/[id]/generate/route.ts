@@ -14,7 +14,7 @@ export async function POST(
   try {
     const { id: projectId } = await params;
 
-    let ocrEngine = "direct"; // default to direct (images-only, fastest)
+    let ocrEngine = "tesseract"; // default to tesseract (editable text extraction)
     let ocrSpaceApiKey = "";
     try {
       const body = await request.json();
@@ -110,10 +110,15 @@ export async function POST(
 
       } else {
         // ===== OCR PATH: Process with selected OCR engine, then generate =====
-        const imagesToProcess = project.images.map((img: any) => ({
-          id: img.id,
-          path: `${projectId}/${img.filename}`,
-        }));
+        // Pass pre-downloaded buffers to avoid double-downloading from Supabase
+        const imagesToProcess = project.images.map((img: any) => {
+          const imgPath = `${projectId}/${img.filename}`;
+          return {
+            id: img.id,
+            path: imgPath,
+            buffer: imageDataMap.get(imgPath),
+          };
+        });
 
         let ocrResults;
         console.time("OCR processing");

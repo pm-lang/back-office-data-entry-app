@@ -19,7 +19,7 @@ import {
 export default function SettingsPage() {
   const [apiKey, setApiKey] = useState("");
   const [ocrSpaceApiKey, setOcrSpaceApiKey] = useState("");
-  const [ocrEngine, setOcrEngine] = useState<"direct" | "tesseract" | "gemini" | "ocrspace">("direct");
+  const [ocrEngine, setOcrEngine] = useState<"direct" | "tesseract" | "gemini" | "ocrspace">("tesseract");
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<{

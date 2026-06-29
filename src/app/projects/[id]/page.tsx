@@ -116,7 +116,7 @@ export default function ProjectEditor() {
       setGenerateProgress(20);
       setGenerateStatus(`Processing ${images.length} images with AI...`);
 
-      const ocrEngine = localStorage.getItem("ocr_engine") || "direct";
+      const ocrEngine = localStorage.getItem("ocr_engine") || "tesseract";
       const ocrSpaceApiKey = localStorage.getItem("ocr_space_api_key") || "";
 
       setGenerateStatus(
