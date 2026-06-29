@@ -70,8 +70,13 @@ export async function processImages(
 ): Promise<OCRResult[]> {
   const results: OCRResult[] = [];
 
-  // Determine language based on subject
-  const lang = subject === "HINDI" ? "hin+eng" : "eng";
+  // Restrict language model strictly based on subject
+  let lang = "eng";
+  if (subject === "HINDI") {
+    lang = "hin"; // Only load Hindi to save memory/speed
+  } else if (subject === "ENGLISH" || subject === "SCIENCE" || subject === "MATHS") {
+    lang = "eng";
+  }
 
   let worker: Worker | null = null;
   
