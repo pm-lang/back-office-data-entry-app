@@ -33,6 +33,11 @@ export async function POST(
       // Ignore empty body errors
     }
 
+    // Fallback to env var if client doesn't provide one
+    if (!groqApiKey && process.env.GROQ_API_KEY) {
+      groqApiKey = process.env.GROQ_API_KEY;
+    }
+
     // Verify API key is configured if using Gemini
     if (ocrEngine === "gemini") {
       if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === "your_gemini_api_key_here") {
