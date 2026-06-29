@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { processImages } from "@/lib/ocr";
 import { generateDocument } from "@/lib/docgen";
 import { supabase } from "@/lib/supabase";
@@ -24,16 +23,17 @@ export async function POST(
     }
 
     // Fetch project with images
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        images: {
-          orderBy: { orderIndex: "asc" },
-        },
-      },
-    });
+    const { data: project, error: fetchError } = await supabase
+      .from("Project")
+      .select(`
+        *,
+        images:ProjectImage(*)
+      `)
+      .eq("id", projectId)
+      .order("orderIndex", { referencedTable: "ProjectImage", ascending: true })
+      .single();
 
-    if (!project) {
+    if (fetchError || !project) {
       return NextResponse.json(
         { error: "Project not found" },
         { status: 404 }
@@ -48,14 +48,14 @@ export async function POST(
     }
 
     // Update project status to processing
-    await prisma.project.update({
-      where: { id: projectId },
-      data: { status: "PROCESSING" },
-    });
+    await supabase
+      .from("Project")
+      .update({ status: "PROCESSING", updatedAt: new Date().toISOString() })
+      .eq("id", projectId);
 
     try {
       // Prepare image paths for Supabase Storage
-      const imagesToProcess = project.images.map((img) => ({
+      const imagesToProcess = project.images.map((img: any) => ({
         id: img.id,
         path: `${projectId}/${img.filename}`,
       }));
@@ -74,16 +74,16 @@ export async function POST(
       // Save OCR text to database
       for (const result of ocrResults) {
         if (result.success) {
-          await prisma.projectImage.update({
-            where: { id: result.imageId },
-            data: { ocrText: result.text },
-          });
+          await supabase
+            .from("ProjectImage")
+            .update({ ocrText: result.text })
+            .eq("id", result.imageId);
         }
       }
 
       // Collect successful OCR texts and image paths in order
       const orderedContent = project.images
-        .map((img) => {
+        .map((img: any) => {
           const result = ocrResults.find((r) => r.imageId === img.id);
           if (result?.success) {
             return {
@@ -93,7 +93,7 @@ export async function POST(
           }
           return null;
         })
-        .filter((item): item is { text: string; imagePath: string } => item !== null);
+        .filter((item: any): item is { text: string; imagePath: string } => item !== null);
 
       // Generate Word document
       const docBuffer = await generateDocument(
@@ -103,13 +103,13 @@ export async function POST(
       );
 
       // Update project status
-      await prisma.project.update({
-        where: { id: projectId },
-        data: { status: "COMPLETED" },
-      });
+      await supabase
+        .from("Project")
+        .update({ status: "COMPLETED", updatedAt: new Date().toISOString() })
+        .eq("id", projectId);
 
       // Delete images from Supabase Storage to save space
-      const imagePaths = project.images.map((img) => `${projectId}/${img.filename}`);
+      const imagePaths = project.images.map((img: any) => `${projectId}/${img.filename}`);
       if (imagePaths.length > 0) {
         const { error: storageError } = await supabase.storage
           .from("worksheets")
@@ -120,9 +120,10 @@ export async function POST(
       }
 
       // Delete images from database
-      await prisma.projectImage.deleteMany({
-        where: { projectId }
-      });
+      await supabase
+        .from("ProjectImage")
+        .delete()
+        .eq("projectId", projectId);
 
       // Return document as downloadable file
       const filename = `${project.name.replace(/[^a-zA-Z0-9\u0900-\u097F ]/g, "_")}.docx`;
@@ -138,10 +139,10 @@ export async function POST(
       });
     } catch (processError) {
       // Update project status to error
-      await prisma.project.update({
-        where: { id: projectId },
-        data: { status: "ERROR" },
-      });
+      await supabase
+        .from("Project")
+        .update({ status: "ERROR", updatedAt: new Date().toISOString() })
+        .eq("id", projectId);
       throw processError;
     }
   } catch (error) {
@@ -151,3 +152,4 @@ export async function POST(
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
+

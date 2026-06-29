@@ -52,6 +52,7 @@ export async function PUT(
         ...(subject && { subject }),
         ...(description !== undefined && { description }),
         ...(status && { status }),
+        updatedAt: new Date().toISOString(),
       })
       .eq("id", id)
       .select()

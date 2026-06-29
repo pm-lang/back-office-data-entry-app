@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
+import { v4 as uuidv4 } from "uuid";
 
 // GET /api/projects - List all projects
 export async function GET() {
@@ -41,12 +42,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const now = new Date().toISOString();
     const { data: project, error } = await supabase
       .from("Project")
       .insert({
+        id: uuidv4(),
         name: name.trim(),
         subject: subject || "OTHER",
         description: description || null,
+        createdAt: now,
+        updatedAt: now,
       })
       .select()
       .single();

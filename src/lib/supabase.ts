@@ -5,4 +5,14 @@ const supabaseUrl = process.env.SUPABASE_URL!;
 // but since this is a private app, using it server-side is fine.
 const supabaseKey = process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_PUBLISHABLE_KEY!;
 
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  realtime: {
+    params: {
+      eventsPerSecond: -1,
+    },
+  },
+  auth: {
+    persistSession: false,
+    autoRefreshToken: false,
+  },
+});

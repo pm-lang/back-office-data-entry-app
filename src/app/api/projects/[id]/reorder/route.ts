@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { supabase } from "@/lib/supabase";
 
 // PUT /api/projects/[id]/reorder - Update image order
 export async function PUT(
@@ -23,10 +23,11 @@ export async function PUT(
     // Update each image's order index
     await Promise.all(
       images.map((img) =>
-        prisma.projectImage.update({
-          where: { id: img.id, projectId },
-          data: { orderIndex: img.orderIndex },
-        })
+        supabase
+          .from("ProjectImage")
+          .update({ orderIndex: img.orderIndex })
+          .eq("id", img.id)
+          .eq("projectId", projectId)
       )
     );
 
@@ -39,3 +40,4 @@ export async function PUT(
     );
   }
 }
+

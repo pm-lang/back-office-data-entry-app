@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
 import { v4 as uuidv4 } from "uuid";
 import { supabase } from "@/lib/supabase";
 
@@ -12,10 +11,13 @@ export async function POST(
     const { id: projectId } = await params;
 
     // Verify project exists
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-    });
-    if (!project) {
+    const { data: project, error: projectError } = await supabase
+      .from("Project")
+      .select("id")
+      .eq("id", projectId)
+      .single();
+
+    if (projectError || !project) {
       return NextResponse.json(
         { error: "Project not found" },
         { status: 404 }
@@ -33,11 +35,14 @@ export async function POST(
     }
 
     // Get current max order index
-    const maxOrderResult = await prisma.projectImage.findFirst({
-      where: { projectId },
-      orderBy: { orderIndex: "desc" },
-      select: { orderIndex: true },
-    });
+    const { data: maxOrderResult } = await supabase
+      .from("ProjectImage")
+      .select("orderIndex")
+      .eq("projectId", projectId)
+      .order("orderIndex", { ascending: false })
+      .limit(1)
+      .single();
+    
     let nextOrder = (maxOrderResult?.orderIndex ?? -1) + 1;
 
     const createdImages = [];
@@ -63,14 +68,20 @@ export async function POST(
       }
 
       // Save to database
-      const image = await prisma.projectImage.create({
-        data: {
+      const { data: image, error: insertError } = await supabase
+        .from("ProjectImage")
+        .insert({
+          id: uuidv4(),
           projectId,
           filename,
           originalName: file.name,
           orderIndex: nextOrder++,
-        },
-      });
+          createdAt: new Date().toISOString(),
+        })
+        .select()
+        .single();
+
+      if (insertError) throw insertError;
 
       createdImages.push(image);
     }
@@ -102,11 +113,13 @@ export async function DELETE(
     }
 
     // Get image record
-    const image = await prisma.projectImage.findUnique({
-      where: { id: imageId },
-    });
+    const { data: image, error: fetchError } = await supabase
+      .from("ProjectImage")
+      .select("*")
+      .eq("id", imageId)
+      .single();
 
-    if (!image || image.projectId !== projectId) {
+    if (fetchError || !image || image.projectId !== projectId) {
       return NextResponse.json(
         { error: "Image not found" },
         { status: 404 }
@@ -123,20 +136,28 @@ export async function DELETE(
     }
 
     // Delete from database
-    await prisma.projectImage.delete({ where: { id: imageId } });
+    const { error: deleteError } = await supabase
+      .from("ProjectImage")
+      .delete()
+      .eq("id", imageId);
+
+    if (deleteError) throw deleteError;
 
     // Re-index remaining images
-    const remaining = await prisma.projectImage.findMany({
-      where: { projectId },
-      orderBy: { orderIndex: "asc" },
-    });
+    const { data: remaining } = await supabase
+      .from("ProjectImage")
+      .select("*")
+      .eq("projectId", projectId)
+      .order("orderIndex", { ascending: true });
 
-    for (let i = 0; i < remaining.length; i++) {
-      if (remaining[i].orderIndex !== i) {
-        await prisma.projectImage.update({
-          where: { id: remaining[i].id },
-          data: { orderIndex: i },
-        });
+    if (remaining) {
+      for (let i = 0; i < remaining.length; i++) {
+        if (remaining[i].orderIndex !== i) {
+          await supabase
+            .from("ProjectImage")
+            .update({ orderIndex: i })
+            .eq("id", remaining[i].id);
+        }
       }
     }
 
@@ -149,3 +170,4 @@ export async function DELETE(
     );
   }
 }
+
